@@ -1,95 +1,58 @@
 #include <Arduino.h>
-#include <Adafruit_Sensor.h>     // Required dependency
-#include <Adafruit_BMP280.h>    // BMP280 library
-#include <Wire.h>               //Required for I2C
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP280.h>
+#include <Wire.h>
+#include <SD.h>
 
-#include <SD.h>                 //SD 
-
-
-Adafruit_BMP280 bmp; // Create a BMP280 object
-#define SD_CS 5    // Chip Select pin for SD card module **CHANGE IF NEEDED**
+Adafruit_BMP280 bmp;    // I2C
+#define SD_CS 5         // SD card CS (common on ESP32 dev boards)
 File myFile;
 
+void setup() {
+  Serial.begin(115200);
+  // while(!Serial) delay(50); // optional on ESP32, can remove
 
-void setup()
-{
-    // CODE FOR BMP280
-    Serial.begin(115200);          // initialize serial communication with baud rate of 9600
-    while (!Serial) delay(100);  // wait for native usb
-    Serial.println(F("BMP280 test"));
+  Serial.println("BMP280 test");
 
-    // Initialize BMP280 using status variable
-    unsigned status;
-    status = bmp.begin(BMP280_ADDRESS);
+  // I2C on ESP32 defaults are 21 (SDA) and 22 (SCL), make explicit:
+  Wire.begin(21, 22);
+  delay(50); // give sensor time after power-up
 
-    if (!status) {
-        Serial.println(F("ERROR: Could not find a valid BMP280 sensor. Check wiring or try a different I2C address (0x76 or 0x77)."));
-        while (1) delay(10); // Stop execution
-    }
+  // Try both common addresses
+  if (!bmp.begin(0x76) && !bmp.begin(0x77)) {
+    Serial.println("Could not find BMP280 (I2C). Check wiring/address.");
+    Serial.printf("sensorID: 0x%02X\n", bmp.sensorID());
+    while (1) delay(10);
+  }
+  else{
+    Serial.println("BMP280 OK.");
+  }
+  if (bmp.begin(0x76) || bmp.begin(0x77))
+  {
+    Serial.println("Found BMP280.");
+  }
+  Serial.println("Done");
 
-    Serial.println(F("BMP280 successfully initialized!"));
+  // SD card test (SPI)
+  if (!SD.begin(SD_CS)) {
+    Serial.println("SD init failed! (check wiring/CS/power)");
+    while (1) delay(10);
+  }
+  Serial.println("SD OK.");
 
+  myFile = SD.open("/test.txt", FILE_WRITE);
+  if (myFile) { myFile.println("testing 1, 2, 3."); myFile.close(); Serial.println("Wrote file."); }
+  else Serial.println("Error opening test.txt");
 
-    // CODE FOR TESTING THE SD MODULE
-    Serial.begin(115200);
-    delay(1000); // small delay to make sure the Serial Monitor has time to connect
-    Serial.println("Serial communication started");
-
-    if (!SD.begin(SD_CS)) {
-        Serial.println("SD Card initialization failed!");
-        while (1);
-    }
-    Serial.println("SD Card initialized.");
-
-    //Writing in text file on the SD card
-    myFile = SD.open("/test.txt", FILE_WRITE);
-    
-    if(myFile) {
-        myFile.println("testing 1, 2, 3.");
-        myFile.close();
-        Serial.println("Done writing.");
-    }
-    else {
-        Serial.println("Error opening test.txt");
-    }
-
-    //Reading from text file from the SD card
-    myFile = SD.open("/test.txt");
-    if (myFile) {
-        Serial.println("Reading from test.txt:");
-        while (myFile.available()) {
-        Serial.write(myFile.read());
-        }
-        myFile.close();
-    } else {
-        Serial.println("Error opening test.txt");
-    }
+  myFile = SD.open("/test.txt");
+  if (myFile) { Serial.println("Reading test.txt:"); while (myFile.available()) Serial.write(myFile.read()); myFile.close(); }
+  else Serial.println("Error opening test.txt");
 }
 
-void loop()
-{
-    // THIS IS CODE FOR BMP280
-    // Read sensor data
-    float temperature = bmp.readTemperature();     // °C
-    float pressure = bmp.readPressure();           // Pascals
-    float altitude = bmp.readAltitude(101325);     // Meters (standard sea level pressure)
-
-    // Display readings
-    Serial.print(F("Temperature: "));
-    Serial.print(temperature);
-    Serial.print(F(" °C | Pressure: "));
-    Serial.print(pressure);
-    Serial.print(F(" Pa | Altitude: "));
-    Serial.print(altitude);
-    Serial.println(F(" m"));
-
-    delay(500); // Update every 0.5 seconds
+void loop() {
+  Serial.print("T: "); Serial.print(bmp.readTemperature());
+  Serial.print(" C | P: "); Serial.print(bmp.readPressure());
+  Serial.print(" Pa | Alt: "); Serial.print(bmp.readAltitude(101325));
+  Serial.println(" m");
+  delay(500);
 }
-
-
-
-
-
-
-// Website viewed: https://docs.sunfounder.com/projects/umsk/en/latest/02_arduino/uno_lesson20_bmp280.html
-// Website viewedL https://docs.arduino.cc/learn/programming/sd-guide/
